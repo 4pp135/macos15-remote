@@ -1,0 +1,58 @@
+
+name: macOS 15 Remote Desktop
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    runs-on: macos-15
+    timeout-minutes: 360
+
+    steps:
+      - name: Connect Tailscale
+        uses: tailscale/github-action@v4
+        with:
+          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+
+      - name: Enable VNC
+        env:
+          VNC_PASSWORD: ${{ secrets.VNC_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          KICKSTART="/System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart"
+
+          sudo "$KICKSTART" -activate
+
+          sudo "$KICKSTART" \
+            -configure \
+            -allowAccessFor -allUsers \
+            -privs -all
+
+          sudo "$KICKSTART" \
+            -configure \
+            -clientopts \
+            -setvnclegacy -vnclegacy yes \
+            -setvncpw -vncpw "$VNC_PASSWORD"
+
+          sudo "$KICKSTART" -agent -settings
+
+          sudo "$KICKSTART" -restart -agent -console
+
+      - name: Show Mac connection
+        run: |
+          echo "macOS version:"
+          sw_vers
+
+          echo "Tailscale IPv4:"
+          tailscale ip -4
+
+          echo "Checking VNC:"
+          nc -zv 127.0.0.1 5900
+
+      - name: Keep Mac running
+        run: sleep 20400
